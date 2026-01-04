@@ -2,6 +2,10 @@ import os
 import numpy as np
 import faiss
 from openai import OpenAI
+from dotenv import load_dotenv
+# 把 .env 里所有 KEY=VALUE 注入到 os.environ
+load_dotenv()          # 默认查找当前目录下的 .env
+#print("已加载API密钥：", os.getenv("DASHSCOPE_API_KEY"))
 
 # Step1. 初始化 API 客户端
 try:
