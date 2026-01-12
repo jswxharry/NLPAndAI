@@ -1,0 +1,16 @@
+# PDF处理
+PyPDF2>=3.0.0
+
+# LangChain核心库
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-text-splitters>=0.0.1
+
+# 向量数据库
+faiss-cpu>=1.7.4
+
+# 阿里巴巴DashScope API
+dashscope>=1.10.0
+
+# 其他依赖
+python-dotenv>=1.0.0

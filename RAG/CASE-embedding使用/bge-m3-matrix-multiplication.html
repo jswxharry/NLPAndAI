@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGE-M3 Embedding 矩阵乘法详解</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        .matrix-visual {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #ecf0f1;
+            border-radius: 8px;
+        }
+        .matrix-box {
+            text-align: center;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .matrix-dim {
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 10px;
+        }
+        .arrow {
+            font-size: 24px;
+            color: #3498db;
+            margin: 0 20px;
+        }
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .result-table th, .result-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+        }
+        .result-table th {
+            background-color: #3498db;
+            color: white;
+        }
+        .result-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .mermaid-container {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .formula {
+            font-size: 18px;
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #e8f4f8;
+            border-radius: 5px;
+            font-family: 'Times New Roman', serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BGE-M3 Embedding 矩阵乘法详解</h1>
+        
+        <h2>1. 代码示例分析</h2>
+        <p>让我们先看一下原始的代码示例：</p>
+        
+        <div class="code-block">
+# 原始查询语句<br>
+sentences_1 = ["What is BGE M3?", "Defination of BM25"]<br>
+sentences_2 = ["BGE M3 is an embedding model supporting dense retrieval, lexical matching and multi-vector interaction.", <br>
+               "BM25 is a bag-of-words retrieval function that ranks a set of documents based on the query terms appearing in each document"]<br><br>
+# 获取embedding向量<br>
+embeddings_1 = model.encode(sentences_1)['dense_vecs']  # shape: (2, 1024)<br>
+embeddings_2 = model.encode(sentences_2)['dense_vecs']  # shape: (2, 1024)<br><br>
+# 矩阵乘法计算相似度<br>
+<span class="highlight">similarity = embeddings_1 @ embeddings_2.T</span><br>
+print(similarity)<br>
+# 输出: [[0.6265, 0.3477], [0.3499, 0.678 ]]
+        </div>
+
+        <h2>2. 矩阵维度分析</h2>
+        <div class="matrix-visual">
+            <div class="matrix-box">
+                <div class="matrix-dim">embeddings_1<br>形状: (2, 1024)</div>
+                <div>[[v₁₁, v₁₂, ..., v₁₁₀₂₄],<br>
+                     [v₂₁, v₂₂, ..., v₂₁₀₂₄]]</div>
+                <div style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">2个查询向量</div>
+            </div>
+            
+            <div class="arrow">@</div>
+            
+            <div class="matrix-box">
+                <div class="matrix-dim">embeddings_2.T<br>形状: (1024, 2)</div>
+                <div>[[d₁₁, d₂₁],<br>
+                     [d₁₂, d₂₂],<br>
+                     [...],<br>
+                     [d₁₁₀₂₄, d₂₁₀₂₄]]</div>
+                <div style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">2个文档向量转置</div>
+            </div>
+            
+            <div class="arrow">=</div>
+            
+            <div class="matrix-box">
+                <div class="matrix-dim">similarity<br>形状: (2, 2)</div>
+                <div>[[sim(q₁,d₁), sim(q₁,d₂)],<br>
+                     [sim(q₂,d₁), sim(q₂,d₂)]]</div>
+                <div style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">相似度矩阵</div>
+            </div>
+        </div>
+
+        <h2>3. 矩阵乘法详细过程</h2>
+        <div class="mermaid-container">
+            <div class="mermaid">
+                flowchart TD
+                    A[开始] --> B[获取 embeddings_1<br>形状: (2, 1024)]
+                    B --> C[获取 embeddings_2<br>形状: (2, 1024)]
+                    C --> D[转置 embeddings_2.T<br>形状: (1024, 2)]
+                    D --> E[执行矩阵乘法<br>embeddings_1 @ embeddings_2.T]
+                    E --> F[计算每个query与每个doc的点积]
+                    F --> G[生成相似度矩阵<br>形状: (2, 2)]
+                    G --> H[结束]
+                
+                    subgraph 计算细节
+                        F1[query1 · doc1 = Σ(v₁ᵢ × d₁ᵢ)] --> F
+                        F2[query1 · doc2 = Σ(v₁ᵢ × d₂ᵢ)] --> F
+                        F3[query2 · doc1 = Σ(v₂ᵢ × d₁ᵢ)] --> F
+                        F4[query2 · doc2 = Σ(v₂ᵢ × d₂ᵢ)] --> F
+                    end
+            </div>
+        </div>
+
+        <h2>4. 相似度计算详解</h2>
+        <p>让我们用具体的数值来理解这个计算过程：</p>
+        
+        <table class="result-table">
+            <tr>
+                <th>Query</th>
+                <th>Document</th>
+                <th>相似度值</th>
+                <th>解释</th>
+            </tr>
+            <tr>
+                <td>"What is BGE M3?"</td>
+                <td>"BGE M3 is an embedding model..."</td>
+                <td>0.6265</td>
+                <td>高相似度，内容直接相关</td>
+            </tr>
+            <tr>
+                <td>"What is BGE M3?"</td>
+                <td>"BM25 is a bag-of-words..."</td>
+                <td>0.3477</td>
+                <td>低相似度，主题不相关</td>
+            </tr>
+            <tr>
+                <td>"Defination of BM25"</td>
+                <td>"BGE M3 is an embedding model..."</td>
+                <td>0.3499</td>
+                <td>低相似度，主题不相关</td>
+            </tr>
+            <tr>
+                <td>"Defination of BM25"</td>
+                <td>"BM25 is a bag-of-words..."</td>
+                <td>0.678</td>
+                <td>高相似度，内容直接相关</td>
+            </tr>
+        </table>
+
+        <h2>5. 向量相似度计算原理</h2>
+        <div class="formula">
+            <strong>点积相似度公式:</strong><br><br>
+            similarity(q, d) = Σ(qᵢ × dᵢ) / (||q|| × ||d||)<br><br>
+            其中:<br>
+            q = query向量, d = document向量<br>
+            ||q|| = √(Σqᵢ²), ||d|| = √(Σdᵢ²)
+        </div>
+
+        <p>在BGE-M3中，输出的向量已经经过了L2归一化，因此可以直接使用点积计算相似度：</p>
+        
+        <div class="code-block">
+# 归一化后的向量点积等价于余弦相似度<br>
+# 因为: cos(θ) = (q·d) / (||q||×||d||) = q·d (当||q||=||d||=1时)<br><br>
+# 所以 embeddings_1 @ embeddings_2.T 直接得到余弦相似度
+        </div>
+
+        <h2>6. 实际应用场景</h2>
+        <div class="mermaid-container">
+            <div class="mermaid">
+                graph TD
+                    A[用户输入Query] --> B[编码Query<br>得到embedding]
+                    C[文档库] --> D[编码所有文档<br>得到embeddings]
+                    B --> E[计算相似度<br>query_embedding @ doc_embeddings.T]
+                    D --> E
+                    E --> F[得到相似度分数]
+                    F --> G[排序并返回Top-K文档]
+                    G --> H[生成最终回答]
+            </div>
+        </div>
+
+        <h2>7. 性能优化技巧</h2>
+        <ul>
+            <li><strong>批量处理:</strong> 一次性编码多个query和document，利用矩阵运算的并行性</li>
+            <li><strong>GPU加速:</strong> 使用CUDA加速矩阵乘法运算</li>
+            <li><strong>缓存机制:</strong> 对频繁查询的document embeddings进行缓存</li>
+            <li><strong>近似搜索:</strong> 对于大规模文档库，使用FAISS等近似最近邻搜索库</li>
+            <li><strong>维度压缩:</strong> 使用PCA或量化技术减少向量维度</li>
+        </ul>
+
+        <h2>8. 总结</h2>
+        <p>BGE-M3中的矩阵乘法 <code>embeddings_1 @ embeddings_2.T</code> 实现了高效的批量相似度计算：</p>
+        <ul>
+            <li>自动计算所有query与所有document之间的相似度</li>
+            <li>利用矩阵运算的并行性，比循环计算快数百倍</li>
+            <li>输出结果可以直接用于排序和检索</li>
+            <li>支持大规模RAG系统的快速文档检索</li>
+        </ul>
+
+        <p>这种矩阵运算方式是现代向量检索系统的核心，为RAG、语义搜索等应用提供了强大的基础。</p>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
