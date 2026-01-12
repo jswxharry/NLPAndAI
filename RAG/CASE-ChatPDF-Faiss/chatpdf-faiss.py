@@ -159,20 +159,28 @@ print(os.getcwd()) # 查看当前工作目录
 os.chdir('RAG/CASE-ChatPDF-Faiss') # 修改为脚本所在目录
 print(os.getcwd()) # 确认修改成功
 
+#提取文章可以用下面代码块，注释掉下面代码块可以直接加载已经保存的向量数据库
+#'''
 pdf_reader = PdfReader('./浦发上海浦东发展银行西安分行个金客户经理考核办法.pdf')
 # 提取文本和页码信息
 text, char_page_mapping = extract_text_with_page_numbers(pdf_reader)
-#print('page_numbers=',page_numbers)
 
-
-# In[9]:
-
-
-print(f"提取的文本长度: {len(text)} 个字符。")
-    
 # 处理文本并创建知识库，同时保存到磁盘
 save_dir = "./vector_db"
 knowledgeBase = process_text_with_splitter(text, char_page_mapping, save_path=save_dir)
+print(f"提取的文本长度: {len(text)} 个字符。")
+# '''
+
+'''
+# 加载已保存的向量数据库
+embeddings = DashScopeEmbeddings(
+    model="text-embedding-v1",
+    dashscope_api_key=DASHSCOPE_API_KEY,
+)
+
+knowledgeBase = load_knowledge_base("./vector_db", embeddings)
+'''
+
 
 # 示例：如何加载已保存的向量数据库
 # 注释掉以下代码以避免在当前运行中重复加载
@@ -200,8 +208,8 @@ from langchain_community.llms import Tongyi
 llm = Tongyi(model_name="deepseek-v3", dashscope_api_key=DASHSCOPE_API_KEY) # qwen-turbo
 
 # 设置查询问题
-query = "客户经理被投诉了，投诉一次扣多少分"
-#query = "客户经理每年评聘申报时间是怎样的？"
+#query = "客户经理被投诉了，投诉一次扣多少分"
+query = "客户经理每年评聘申报时间是怎样的？"
 if query:
     # 执行相似度搜索，找到与查询相关的文档
     docs = knowledgeBase.similarity_search(query,k=10)
@@ -218,6 +226,11 @@ if query:
 
     # 直接调用 LLM
     response = llm.invoke(prompt)
+    
+    #比较长没有需要可以不打印
+    #print("提示词:" + prompt)
+
+    print("\n回答:")
     print(response)
     print("来源:")
 
