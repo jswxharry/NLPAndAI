@@ -43,6 +43,7 @@ class AutoGLMInteractiveClient:
         self.last_action = None  # 上一次操作类型，用于合并相同操作
         self.action_count = 0  # 相同操作计数
         self.waiting_input = False  # 是否正在等待用户输入
+        self.debug_mode = False  # 调试模式，显示详细 JSON 信息
         
     def create_message(self, instruction: str) -> dict:
         """创建指令消息"""
@@ -64,11 +65,20 @@ class AutoGLMInteractiveClient:
             data = json.loads(message)
             msg_type = data.get('msg_type', 'unknown')
             
+            # 调试模式：显示原始 JSON
+            if self.debug_mode:
+                self._safe_print(f"\n[📨 {msg_type}] 原始消息:")
+                self._safe_print(json.dumps(data, ensure_ascii=False, indent=2))
+                self._safe_print("-" * 60)
+                # debug 模式下也要检测任务完成状态
+                self._check_task_completion(msg_type, data)
+                return
+            
             # 根据消息类型显示不同的格式
             if msg_type == 'heartbeat':
                 # 心跳消息简化显示
                 with self.lock:
-                    print(f"\n[💓 心跳] {data.get('timestamp')}")
+                    self._safe_print(f"\n[💓 心跳] {data.get('timestamp')}")
             elif msg_type == 'result':
                 # 结果消息 - 提取关键信息以可读格式显示
                 self._display_result(data)
@@ -76,7 +86,30 @@ class AutoGLMInteractiveClient:
                 # 其他消息 - 简化显示
                 self._display_simple_message(data, msg_type)
         except json.JSONDecodeError:
-            print(f"\n[📩 原始消息] {message}")
+            self._safe_print(f"\n[📩 原始消息] {message}")
+    
+    def _check_task_completion(self, msg_type: str, data: dict):
+        """检查任务是否完成（用于 debug 模式）"""
+        if msg_type != 'server_task':
+            return
+        
+        msg_data = data.get('data', {})
+        data_agent_str = msg_data.get('data_agent', '{}')
+        
+        try:
+            data_agent = json.loads(data_agent_str) if isinstance(data_agent_str, str) else data_agent_str
+        except json.JSONDecodeError:
+            return
+        
+        action = data_agent.get('action', '')
+        
+        if action == 'finish':
+            with self.lock:
+                self.task_finished = True
+            self._safe_print("\n✅ 任务执行完毕")
+            self._safe_print(f"{'-'*60}")
+            self._safe_print(f"💡 提示: 输入下一条指令，或输入 'quit' 退出")
+            self._safe_print(f"{'-'*60}")
     
     def _safe_print(self, *args, **kwargs):
         """线程安全的打印"""
@@ -347,8 +380,19 @@ class AutoGLMInteractiveClient:
         self._safe_print("  help        - 显示此帮助信息")
         self._safe_print("  status      - 查看连接状态")
         self._safe_print("  example     - 显示示例指令")
+        self._safe_print("  debug       - 切换调试模式（显示原始 JSON）")
         self._safe_print("  quit/exit   - 退出程序")
         self._safe_print("="*60)
+    
+    def toggle_debug_mode(self):
+        """切换调试模式"""
+        self.debug_mode = not self.debug_mode
+        status = "开启" if self.debug_mode else "关闭"
+        self._safe_print(f"\n🔧 调试模式已{status}")
+        if self.debug_mode:
+            self._safe_print("   现在将显示原始 JSON 消息")
+        else:
+            self._safe_print("   现在将显示简化消息")
     
     def show_examples(self):
         """显示示例指令"""
@@ -437,6 +481,8 @@ class AutoGLMInteractiveClient:
                         self._safe_print(f"\n连接状态: {status}")
                     elif user_input.lower() == 'example':
                         self.show_examples()
+                    elif user_input.lower() == 'debug':
+                        self.toggle_debug_mode()
                     else:
                         # 发送指令
                         if self.send_instruction(user_input):
