@@ -128,10 +128,9 @@ class AutoGLMInteractiveClient:
             self._display_init_message(msg_type, msg_data)
             return
         
-        # 客户端发送确认消息 - 不显示或极简显示
+        # 客户端发送确认消息 - 服务端回执，不重复显示
         if msg_type == 'client_test':
-            instruction = msg_data.get('instruction', '')
-            self._safe_print(f"\n✅ 指令已发送: {instruction[:30]}{'...' if len(instruction) > 30 else ''}")
+            # 指令发送确认已在 send_instruction 时显示，这里只重置任务状态
             with self.lock:
                 self.task_finished = False
             return
@@ -323,13 +322,18 @@ class AutoGLMInteractiveClient:
             return False
             
         msg = self.create_message(instruction)
-        self._safe_print(f"\n[📤 发送指令 #{self.msg_counter}] {instruction}")
-        self._safe_print("-" * 60)
-        # 重置任务状态
+        # 重置任务状态（必须在发送前重置）
         with self.lock:
             self.task_finished = False
             self.last_action = None
             self.action_count = 0
+        
+        # 显示发送信息
+        self._safe_print(f"\n[📤 发送指令 #{self.msg_counter}] {instruction}")
+        self._safe_print("-" * 60)
+        self._safe_print(f"✅ 指令已发送: {instruction[:40]}{'...' if len(instruction) > 40 else ''}")
+        self._safe_print("⏳ 等待任务执行...")
+        
         self.ws.send(json.dumps(msg))
         return True
     
@@ -437,7 +441,6 @@ class AutoGLMInteractiveClient:
                         # 发送指令
                         if self.send_instruction(user_input):
                             # 等待任务执行完成
-                            self._safe_print("⏳ 等待任务执行...")
                             wait_timeout = 120  # 最长等待120秒
                             wait_start = time.time()
                             while not self.task_finished and time.time() - wait_start < wait_timeout:
