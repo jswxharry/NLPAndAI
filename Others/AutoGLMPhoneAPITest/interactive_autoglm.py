@@ -34,6 +34,7 @@ class AutoGLMInteractiveClient:
     def __init__(self):
         self.ws = None
         self.connected = False
+        self.vm_ready = False  # VM 初始化完成标志
         self.msg_counter = 0
         self.lock = threading.Lock()
         
@@ -63,28 +64,114 @@ class AutoGLMInteractiveClient:
                 with self.lock:
                     print(f"\n[💓 心跳] {data.get('timestamp')}")
             elif msg_type == 'result':
-                # 结果消息高亮显示
-                print(f"\n{'='*60}")
-                print(f"[✅ 执行结果] 类型: {data.get('data', {}).get('result_type', 'unknown')}")
-                print(f"{'='*60}")
-                print(json.dumps(data, ensure_ascii=False, indent=2))
-                print(f"{'='*60}")
-                print(f"\n💡 提示: 输入指令继续，或输入 'quit' 退出")
+                # 结果消息 - 提取关键信息以可读格式显示
+                self._display_result(data)
             else:
-                # 其他消息
-                print(f"\n[📩 消息-{msg_type}]")
-                print(json.dumps(data, ensure_ascii=False, indent=2))
+                # 其他消息 - 简化显示
+                self._display_simple_message(data, msg_type)
         except json.JSONDecodeError:
             print(f"\n[📩 原始消息] {message}")
+    
+    def _display_result(self, data: dict):
+        """以可读格式显示执行结果"""
+        result_data = data.get('data', {})
+        result_type = result_data.get('result_type', 'unknown')
+        
+        print(f"\n{'='*60}")
+        print(f"[✅ 执行结果] 类型: {result_type}")
+        print(f"{'='*60}")
+        
+        # 根据结果类型提取关键信息
+        if result_type == 'text':
+            content = result_data.get('content', '')
+            print(f"📄 内容:\n{content}")
+        elif result_type == 'image':
+            image_url = result_data.get('url', '')
+            print(f"🖼️  图片地址: {image_url}")
+        elif result_type == 'error':
+            error_msg = result_data.get('error', '未知错误')
+            print(f"❌ 错误: {error_msg}")
+        else:
+            # 通用处理 - 显示 data 中的所有字段
+            for key, value in result_data.items():
+                if key == 'result_type':
+                    continue
+                if isinstance(value, str) and len(value) > 200:
+                    print(f"📋 {key}:\n{value[:200]}...")
+                else:
+                    print(f"📋 {key}: {value}")
+        
+        # 显示消息元信息
+        print(f"{'='*60}")
+        print(f"🕐 时间戳: {data.get('timestamp')}")
+        print(f"🆔 消息ID: {data.get('msg_id', 'N/A')}")
+        print(f"{'='*60}")
+        print(f"\n💡 提示: 输入指令继续，或输入 'quit' 退出")
+    
+    def _display_simple_message(self, data: dict, msg_type: str):
+        """简化显示其他消息"""
+        msg_data = data.get('data', {})
+        
+        # 检查是否是初始化相关消息，如果是则简化显示
+        if msg_type in ('server_init', 'server_session'):
+            self._display_init_message(msg_type, msg_data)
+            return
+        
+        print(f"\n[📩 {msg_type}]")
+        
+        # 提取关键字段
+        msg_id = data.get('msg_id', 'N/A')
+        timestamp = data.get('timestamp')
+        
+        # 显示消息内容
+        if msg_data:
+            if isinstance(msg_data, dict):
+                for key, value in msg_data.items():
+                    if isinstance(value, (dict, list)):
+                        # 复杂类型简化显示
+                        summary = self._summarize_value(value)
+                        print(f"  • {key}: {summary}")
+                    else:
+                        print(f"  • {key}: {value}")
+            else:
+                print(f"  • 数据: {msg_data}")
+        
+        print(f"  • 消息ID: {msg_id}")
+        if timestamp:
+            print(f"  • 时间戳: {timestamp}")
+    
+    def _display_init_message(self, msg_type: str, msg_data: dict):
+        """显示初始化消息（简洁格式）"""
+        biz_type = msg_data.get('biz_type', '')
+        vm_state = msg_data.get('vm_state', '')
+        
+        # 根据消息类型显示进度
+        if msg_type == 'server_init':
+            print(f"  🔄 服务初始化中...")
+        elif msg_type == 'server_session':
+            if biz_type == 'init_vm':
+                print(f"  🔄 正在启动虚拟机...")
+            elif biz_type == 'init_session':
+                if vm_state == 'vm_successful':
+                    with self.lock:
+                        if not self.vm_ready:
+                            self.vm_ready = True
+                            print(f"  ✅ 虚拟机就绪: {msg_data.get('vm_id', 'N/A')[:20]}...")
+                else:
+                    print(f"  🔄 虚拟机状态: {vm_state}")
+    
+    def _summarize_value(self, value, max_len: int = 100) -> str:
+        """对复杂值生成简短摘要"""
+        text = json.dumps(value, ensure_ascii=False)
+        if len(text) <= max_len:
+            return text
+        return text[:max_len] + f"... (共 {len(text)} 字符)"
     
     def on_open(self, ws):
         """连接打开时的回调"""
         self.connected = True
         print("✅ WebSocket 连接已建立")
-        print("-" * 60)
-        print("💡 提示: 输入指令发送给 AutoGLM，输入 'quit' 或 'exit' 退出")
-        print("💡 提示: 输入 'help' 查看帮助")
-        print("-" * 60)
+        print("⏳ 正在初始化服务，请稍候...")
         
     def on_error(self, ws, error):
         """发生错误时的回调"""
@@ -173,6 +260,22 @@ class AutoGLMInteractiveClient:
         if not self.connected:
             print("❌ 连接超时")
             return
+        
+        # 等待 VM 初始化完成
+        init_timeout = 60
+        start_time = time.time()
+        while not self.vm_ready and time.time() - start_time < init_timeout:
+            time.sleep(0.1)
+        
+        if not self.vm_ready:
+            print("❌ 服务初始化超时")
+            return
+        
+        # 初始化完成，显示提示信息
+        print("-" * 60)
+        print("💡 提示: 输入指令发送给 AutoGLM，输入 'quit' 或 'exit' 退出")
+        print("💡 提示: 输入 'help' 查看帮助")
+        print("-" * 60)
         
         # 交互式循环
         try:
